@@ -6,13 +6,15 @@ import 'package:printing/printing.dart';
 class PdfExportService {
   static Future<void> generateMonthlyReport({
     required String monthYear,
+    required String selectedDate, // Add this parameter
     required double gross,
     required double expenses,
     required double net,
     required List<Map<String, dynamic>> barberReports,
   }) async {
     final pdf = pw.Document();
-    final String reportDate = DateFormat('MMMM d, yyyy').format(DateTime.now());
+    
+    // REMOVE the DateTime.now() variable and just use the selectedDate parameter
 
     pdf.addPage(
       pw.Page(
@@ -23,13 +25,15 @@ class PdfExportService {
             children: [
               pw.Text("AKIE BARBERSHOP", style: pw.TextStyle(fontSize: 24, fontWeight: pw.FontWeight.bold)),
               pw.Text("Monthly Financial Report: $monthYear", style: const pw.TextStyle(fontSize: 16)),
-              pw.Text("Report Date: $reportDate", style: pw.TextStyle(fontSize: 12, color: PdfColors.grey700)),
+              
+              // Update this line to use the new parameter
+              pw.Text("Selected Date: $selectedDate", style: pw.TextStyle(fontSize: 12, color: PdfColors.grey700)),
+              
               pw.SizedBox(height: 10),
               pw.Divider(thickness: 1),
               pw.SizedBox(height: 20),
 
               pw.Text("SUMMARY", style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
-              // Using "PHP" instead of the "₱" symbol to avoid font errors
               pw.Bullet(text: "Gross Revenue: PHP ${gross.toStringAsFixed(2)}"),
               pw.Bullet(text: "Total Expenses: PHP ${expenses.toStringAsFixed(2)}"),
               pw.Bullet(text: "Shop Net Profit: PHP ${net.toStringAsFixed(2)}", style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
@@ -43,11 +47,11 @@ class PdfExportService {
                 headerDecoration: const pw.BoxDecoration(color: PdfColors.grey100),
                 headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold),
                 data: <List<String>>[
-                  ['Barber', 'Services', 'Profit (PHP)'], // Clarify currency in header
+                  ['Barber', 'Services', 'Profit (PHP)'], 
                   ...barberReports.map((r) => [
                     r['name'].toString().toUpperCase(),
                     r['count'].toString(),
-                    r['profit'].toStringAsFixed(2) // No symbol needed inside the table cells if in header
+                    r['profit'].toStringAsFixed(2) 
                   ]),
                 ],
               ),

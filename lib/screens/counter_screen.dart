@@ -1,8 +1,10 @@
-import 'dart:ui'; // Required for ImageFilter
+import 'dart:ui'; 
+import 'dart:async'; // Required for the Live Clock
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:intl/intl.dart'; // Required for DateFormat
 import '../providers/counter_provider.dart';
 import '../models/barber_model.dart';
 import '../utils/formatters.dart'; 
@@ -20,14 +22,32 @@ class CounterScreen extends StatefulWidget {
 class _CounterScreenState extends State<CounterScreen> {
   bool _obscureMoney = false;
   late Future<List<Map<String, dynamic>>> _barbersFuture;
+  
+  // Clock Variables
+  Timer? _timer;
+  DateTime _currentTime = DateTime.now();
 
   @override
   void initState() {
     super.initState();
     _refreshBarbers();
+    
+    // Start the live clock
+    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
+      setState(() {
+        _currentTime = DateTime.now();
+      });
+    });
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<CounterProvider>().fetchTodayTransactions();
     });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel(); // Always cancel timers to prevent memory leaks
+    super.dispose();
   }
 
   void _refreshBarbers() {
@@ -46,7 +66,7 @@ class _CounterScreenState extends State<CounterScreen> {
 
     overlayEntry = OverlayEntry(
       builder: (context) => Positioned(
-        top: MediaQuery.of(context).padding.top + 16, // Just below status bar
+        top: MediaQuery.of(context).padding.top + 16, 
         left: 0,
         right: 0,
         child: SafeArea(
@@ -60,7 +80,6 @@ class _CounterScreenState extends State<CounterScreen> {
 
     overlay.insert(overlayEntry);
 
-    // Auto dismiss after 3 seconds
     Future.delayed(const Duration(seconds: 3), () {
       if (overlayEntry.mounted) {
         overlayEntry.remove();
@@ -154,7 +173,6 @@ class _CounterScreenState extends State<CounterScreen> {
     final totalWalkIns = allTransactions.length;
     final totalRevenue = totalWalkIns * provider.globalPrice.toDouble();
 
-    // Fetch the loaded barbers directly from our future
     final barbersData = await _barbersFuture;
     final barbers = barbersData.map((b) => Barber.fromMap(b)).toList();
 
@@ -196,7 +214,6 @@ class _CounterScreenState extends State<CounterScreen> {
                         ),
                         const SizedBox(height: 20),
                         
-                        // Barber List Summary
                         Container(
                           constraints: const BoxConstraints(maxHeight: 200),
                           child: SingleChildScrollView(
@@ -239,7 +256,6 @@ class _CounterScreenState extends State<CounterScreen> {
                         
                         Divider(color: Colors.white.withValues(alpha: 0.1), height: 32),
                         
-                        // Total Day Summary
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
@@ -258,7 +274,6 @@ class _CounterScreenState extends State<CounterScreen> {
                         
                         const SizedBox(height: 30),
                         
-                        // Action Buttons
                         Row(
                           children: [
                             Expanded(
@@ -288,8 +303,8 @@ class _CounterScreenState extends State<CounterScreen> {
 
                                     if (!context.mounted) return;
                                     
-                                    Navigator.pop(context); // Pop loading
-                                    Navigator.pop(context); // Pop dialog
+                                    Navigator.pop(context); 
+                                    Navigator.pop(context); 
 
                                     HapticFeedback.heavyImpact();
                                     _showTopAlert(context, 'Day successfully closed & archived!');
@@ -354,7 +369,7 @@ class _CounterScreenState extends State<CounterScreen> {
                         const Text("Reopen Shop?", style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
                         const SizedBox(height: 8),
                         const Text(
-                          "This will remove the saved summary report and restore today's counters to let you add more clients.", 
+                          "This will remove the saved summary report and restore today's counters.", 
                           textAlign: TextAlign.center,
                           style: TextStyle(color: Colors.white60, fontSize: 14)
                         ),
@@ -387,8 +402,8 @@ class _CounterScreenState extends State<CounterScreen> {
 
                                     if (!context.mounted) return;
                                     
-                                    Navigator.pop(context); // Pop loading
-                                    Navigator.pop(context); // Pop dialog
+                                    Navigator.pop(context); 
+                                    Navigator.pop(context); 
 
                                     HapticFeedback.lightImpact();
                                     _showTopAlert(context, 'Shop reopened! Counters restored.');
@@ -428,7 +443,6 @@ class _CounterScreenState extends State<CounterScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Watch the closed state here!
     final isShopClosed = context.watch<CounterProvider>().isShopClosed;
 
     return Scaffold(
@@ -464,7 +478,6 @@ class _CounterScreenState extends State<CounterScreen> {
                   icon: Icon(_obscureMoney ? Icons.visibility_off_rounded : Icons.visibility_rounded, color: Colors.blueAccent.withValues(alpha: 0.7)),
                   onPressed: () => setState(() => _obscureMoney = !_obscureMoney),
                 ),
-                // Show Unlock icon if closed, Store icon if open
                 if (isShopClosed)
                   IconButton(
                     icon: Icon(Icons.lock_open_rounded, color: Colors.orangeAccent.withValues(alpha: 0.8)),
@@ -508,27 +521,49 @@ class _CounterScreenState extends State<CounterScreen> {
 
                   return Column(
                     children: [
-                      const SizedBox(height: 120),
-                      _buildGlassSummary(totalWalkIns, totalRevenue),
-                      Expanded(
-                        child: GridView.builder(
-                          padding: const EdgeInsets.fromLTRB(20, 25, 20, 40),
-                          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: 2, 
-                            mainAxisSpacing: 20, 
-                            crossAxisSpacing: 20, 
-                            childAspectRatio: 0.72, 
-                          ),
-                          itemCount: barbers.length,
-                          itemBuilder: (context, index) {
-                            final barber = barbers[index];
-                            bool isOff = !provider.isBarberAvailable(barber);
-                            final barberCount = allTransactions.where((t) => t['barber_id'] == barber.id).length;
-                            final barberProfit = barberCount * (provider.globalPrice * 0.5);
-                            return _buildBarberCard(context, provider, barber, barberCount, barberProfit, isOff);
-                          },
+                      const SizedBox(height: 100),
+                      
+                      // 1. LIVE CLOCK COMPONENT
+                      Text(
+                        DateFormat("EEEE, MMM d • hh:mm a").format(_currentTime).toUpperCase(),
+                        style: const TextStyle(
+                          color: Colors.white38,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 2.0,
                         ),
                       ),
+                      const SizedBox(height: 32),
+
+                      _buildGlassSummary(totalWalkIns, totalRevenue),
+                      
+                      // 2. SHOP CLOSED / ACTIVE STATE HANDLING
+                      if (isShopClosed)
+                        Expanded(child: _buildClosedGraphic())
+                      else ...[
+                        Expanded(
+                          child: GridView.builder(
+                            padding: const EdgeInsets.fromLTRB(20, 25, 20, 20),
+                            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                              crossAxisCount: 2, 
+                              mainAxisSpacing: 20, 
+                              crossAxisSpacing: 20, 
+                              childAspectRatio: 0.72, 
+                            ),
+                            itemCount: barbers.length,
+                            itemBuilder: (context, index) {
+                              final barber = barbers[index];
+                              bool isOff = !provider.isBarberAvailable(barber);
+                              final barberCount = allTransactions.where((t) => t['barber_id'] == barber.id).length;
+                              final barberProfit = barberCount * (provider.globalPrice * 0.5);
+                              return _buildBarberCard(context, provider, barber, barberCount, barberProfit, isOff);
+                            },
+                          ),
+                        ),
+                        // 3. RECENT ACTIVITY COMPONENT
+                        _buildRecentActivityFeed(provider, barbers),
+                        const SizedBox(height: 20),
+                      ]
                     ],
                   );
                 },
@@ -577,8 +612,98 @@ class _CounterScreenState extends State<CounterScreen> {
     );
   }
 
+  Widget _buildClosedGraphic() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(28),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.02),
+              shape: BoxShape.circle,
+              border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+            ),
+            child: Icon(Icons.nightlight_round, color: Colors.blueAccent.withValues(alpha: 0.4), size: 64),
+          ),
+          const SizedBox(height: 24),
+          const Text(
+            "END OF DAY REPORT SAVED",
+            style: TextStyle(color: Colors.white60, fontSize: 13, fontWeight: FontWeight.w900, letterSpacing: 2),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            "Great work today. The dashboard is locked.",
+            style: TextStyle(color: Colors.white38, fontSize: 13),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRecentActivityFeed(CounterProvider provider, List<Barber> barbers) {
+    final transactions = provider.todayTransactions;
+    if (transactions.isEmpty) return const SizedBox.shrink();
+
+    // Sort to get the latest transactions first
+    final sortedTx = List.from(transactions)..sort((a, b) {
+      final dateA = DateTime.tryParse(a['created_at'].toString()) ?? DateTime.now();
+      final dateB = DateTime.tryParse(b['created_at'].toString()) ?? DateTime.now();
+      return dateB.compareTo(dateA);
+    });
+    
+    // Take the 3 most recent
+    final recent = sortedTx.take(3).toList();
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 20),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.03),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Padding(
+            padding: EdgeInsets.only(bottom: 12, left: 4),
+            child: Text("RECENT ACTIVITY", style: TextStyle(color: Colors.white38, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 1.5)),
+          ),
+          ...recent.map((tx) {
+            final barber = barbers.firstWhere(
+              (b) => b.id == tx['barber_id'], 
+              orElse: () => Barber(id: '', name: 'Unknown', isAbsent: false, dayOff: '')
+            );
+            final timeStr = tx['created_at'] != null ? DateFormat('hh:mm a').format(DateTime.parse(tx['created_at'].toString()).toLocal()) : "Just now";
+            final amount = tx['amount'] ?? provider.globalPrice;
+
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 8.0),
+              child: Row(
+                children: [
+                  Icon(Icons.history_rounded, color: Colors.blueAccent.withValues(alpha: 0.5), size: 14),
+                  const SizedBox(width: 8),
+                  Text(timeStr, style: const TextStyle(color: Colors.white60, fontSize: 12)),
+                  const SizedBox(width: 8),
+                  const Text("•", style: TextStyle(color: Colors.white24, fontSize: 12)),
+                  const SizedBox(width: 8),
+                  Expanded(child: Text(barber.name.toUpperCase(), style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold))),
+                  Text(
+                    _obscureMoney ? "+ ₱ •••" : "+${CurrencyFormatter.format(amount.toDouble())}", 
+                    style: const TextStyle(color: Colors.greenAccent, fontSize: 12, fontWeight: FontWeight.bold)
+                  ),
+                ],
+              ),
+            );
+          }),
+        ],
+      ),
+    );
+  }
+
   Widget _buildBarberCard(BuildContext context, CounterProvider provider, Barber barber, int barberCount, double barberProfit, bool isOff) {
-    // We check if the provider's shop is closed to disable clicks
     bool isDisabled = isOff || provider.isShopClosed;
 
     return GestureDetector(
@@ -797,7 +922,7 @@ class _PremiumTopAlert extends StatelessWidget {
   final String message;
   final bool isError;
 
-const _PremiumTopAlert({
+  const _PremiumTopAlert({
     required this.message, 
     this.isError = false,
   });

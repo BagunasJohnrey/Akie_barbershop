@@ -197,6 +197,10 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                   icon: const Icon(Icons.picture_as_pdf_rounded, color: Colors.redAccent),
                   onPressed: () => PdfExportService.generateMonthlyReport(
                     monthYear: DateFormat('MMMM yyyy').format(_selectedDate),
+                    
+                    // Add this line so the PDF knows exactly which day you picked!
+                    selectedDate: DateFormat('MMMM d, yyyy').format(_selectedDate), 
+                    
                     gross: _monthlyGross,
                     expenses: _monthlyExpenses,
                     net: monthlyShopNet,

@@ -5,7 +5,7 @@ class LandingPage extends StatelessWidget {
   const LandingPage({super.key});
 
   @override
-  Widget build(BuildContext context) {
+Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFF0A0C12),
       body: Stack(
@@ -39,19 +39,21 @@ class LandingPage extends StatelessWidget {
                             const Spacer(flex: 1),
 
                             // 2. REFINED LOGO PRESENTATION
-                            _buildAnimatedEntry(
-                              delay: 200,
-                              child: Container(
-                                padding: const EdgeInsets.all(16),
-                                decoration: BoxDecoration(
-                                  border: Border.all(color: Colors.white.withAlpha(10)),
-                                  borderRadius: BorderRadius.circular(24),
-                                  color: Colors.white.withAlpha(5),
-                                ),
-                                child: Image.asset(
-                                  'assets/images/akie_logo.png', // Updated to match pubspec
-                                  width: 280,
-                                  fit: BoxFit.contain,
+                            Center(
+                              child: _buildAnimatedEntry(
+                                delay: 200,
+                                child: Container(
+                                  padding: const EdgeInsets.all(16),
+                                  decoration: BoxDecoration(
+                                    border: Border.all(color: Colors.white.withAlpha(10)),
+                                    borderRadius: BorderRadius.circular(24),
+                                    color: Colors.white.withAlpha(5),
+                                  ),
+                                  child: Image.asset(
+                                    'assets/images/akie_logo.png', // Updated to match pubspec
+                                    width: 280,
+                                    fit: BoxFit.contain,
+                                  ),
                                 ),
                               ),
                             ),
