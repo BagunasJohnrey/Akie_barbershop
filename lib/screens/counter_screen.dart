@@ -430,6 +430,110 @@ class _CounterScreenState extends State<CounterScreen> {
     );
   }
 
+  void _showAbsentConfirmation(BuildContext context, CounterProvider provider, Barber barber) {
+    final newAbsentStatus = !barber.isAbsent;
+    final titleText = newAbsentStatus ? "Is ${barber.name} absent?" : "Is ${barber.name} present?";
+    final buttonText = newAbsentStatus ? "Mark Absent" : "Mark Present";
+    final icon = newAbsentStatus ? Icons.person_off_rounded : Icons.person_rounded;
+    final color = newAbsentStatus ? Colors.redAccent : Colors.greenAccent;
+
+    showGeneralDialog(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: '',
+      transitionDuration: const Duration(milliseconds: 300),
+      pageBuilder: (context, anim1, anim2) => const SizedBox.shrink(),
+      transitionBuilder: (context, anim1, anim2, child) {
+        return ScaleTransition(
+          scale: CurvedAnimation(parent: anim1, curve: Curves.easeOutBack),
+          child: FadeTransition(
+            opacity: anim1,
+            child: AlertDialog(
+              backgroundColor: Colors.transparent,
+              contentPadding: EdgeInsets.zero,
+              content: ClipRRect(
+                borderRadius: BorderRadius.circular(28),
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+                  child: Container(
+                    padding: const EdgeInsets.all(24),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF1A1C29).withValues(alpha: 0.85),
+                      borderRadius: BorderRadius.circular(28),
+                      border: Border.all(color: color.withValues(alpha: 0.3)),
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(color: color.withValues(alpha: 0.1), shape: BoxShape.circle),
+                          child: Icon(icon, color: color, size: 32),
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          titleText, 
+                          textAlign: TextAlign.center, 
+                          style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)
+                        ),
+                        const SizedBox(height: 8),
+                        const Text(
+                          "This will update their availability for today.",
+                          textAlign: TextAlign.center,
+                          style: TextStyle(color: Colors.white60, fontSize: 14)
+                        ),
+                        const SizedBox(height: 24),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: TextButton(
+                                onPressed: () => Navigator.pop(context),
+                                child: const Text("Cancel", style: TextStyle(color: Colors.white38, fontWeight: FontWeight.w600)),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: ElevatedButton(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: color.withValues(alpha: 0.8),
+                                  elevation: 0,
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                  padding: const EdgeInsets.symmetric(vertical: 12),
+                                ),
+                                onPressed: () async {
+                                  Navigator.pop(context); // Close dialog
+                                  try {
+                                    await provider.updateBarber(barber.id, barber.name, barber.dayOff, newAbsentStatus);
+                                    if (context.mounted) {
+                                      _refreshBarbers();
+                                      _showTopAlert(
+                                        context, 
+                                        '${barber.name.toUpperCase()} marked as ${newAbsentStatus ? "ABSENT" : "PRESENT"}',
+                                      );
+                                    }
+                                  } catch (e) {
+                                    if (context.mounted) {
+                                      _showTopAlert(context, 'Failed to update status', isError: true);
+                                    }
+                                  }
+                                },
+                                child: Text(buttonText, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   Widget _buildGlow(double size, Color color) {
     return Container(
       width: size,
@@ -703,13 +807,18 @@ class _CounterScreenState extends State<CounterScreen> {
     );
   }
 
-  Widget _buildBarberCard(BuildContext context, CounterProvider provider, Barber barber, int barberCount, double barberProfit, bool isOff) {
+Widget _buildBarberCard(BuildContext context, CounterProvider provider, Barber barber, int barberCount, double barberProfit, bool isOff) {
     bool isDisabled = isOff || provider.isShopClosed;
 
     return GestureDetector(
       onTap: isDisabled ? null : () {
         HapticFeedback.lightImpact(); 
         provider.incrementWalkIn(barber.id);
+      },
+      // Long press triggers the confirmation modal
+      onLongPress: provider.isShopClosed ? null : () {
+        HapticFeedback.heavyImpact(); 
+        _showAbsentConfirmation(context, provider, barber);
       },
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
@@ -806,7 +915,10 @@ class _CounterScreenState extends State<CounterScreen> {
     );
   }
 
-  Widget _buildDrawer(BuildContext context) {
+Widget _buildDrawer(BuildContext context) {
+    // 1. Get the current shop status
+    final isShopClosed = context.watch<CounterProvider>().isShopClosed;
+
     return Drawer(
       backgroundColor: Colors.transparent,
       elevation: 0,
@@ -855,10 +967,18 @@ class _CounterScreenState extends State<CounterScreen> {
                   Navigator.pop(context);
                   Navigator.push(context, MaterialPageRoute(builder: (context) => const AnalyticsScreen()));
                 }),
-                _buildDrawerItem(Icons.receipt_long_rounded, "Expense Tracker", Colors.greenAccent, () {
-                  Navigator.pop(context);
-                  Navigator.push(context, MaterialPageRoute(builder: (context) => const ExpenseScreen()));
-                }),
+                
+                // 2. Conditionally disable the Expense Tracker if closed
+                _buildDrawerItem(
+                  Icons.receipt_long_rounded, 
+                  isShopClosed ? "Expense Tracker (Locked)" : "Expense Tracker", 
+                  Colors.greenAccent, 
+                  isShopClosed ? null : () { // Pass null to disable if closed
+                    Navigator.pop(context);
+                    Navigator.push(context, MaterialPageRoute(builder: (context) => const ExpenseScreen()));
+                  }
+                ),
+
                 _buildDrawerItem(Icons.settings_suggest_rounded, "System Settings", Colors.orangeAccent, () async {
                   Navigator.pop(context);
                   await Navigator.push(context, MaterialPageRoute(builder: (context) => const SettingsScreen()));
@@ -880,16 +1000,32 @@ class _CounterScreenState extends State<CounterScreen> {
     );
   }
 
-  Widget _buildDrawerItem(IconData icon, String title, Color color, VoidCallback onTap) {
+Widget _buildDrawerItem(IconData icon, String title, Color color, VoidCallback? onTap) {
+    // Check if the button is disabled (onTap is null)
+    final bool isDisabled = onTap == null;
+
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 4),
       leading: Container(
         padding: const EdgeInsets.all(8),
-        decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(12)),
-        child: Icon(icon, color: color.withValues(alpha: 0.8), size: 20),
+        decoration: BoxDecoration(
+          // Grey out the background if disabled
+          color: isDisabled ? Colors.white.withValues(alpha: 0.05) : color.withValues(alpha: 0.1), 
+          borderRadius: BorderRadius.circular(12)
+        ),
+        // Grey out the icon if disabled
+        child: Icon(icon, color: isDisabled ? Colors.white24 : color.withValues(alpha: 0.8), size: 20),
       ),
-      title: Text(title, style: const TextStyle(color: Colors.white70, fontWeight: FontWeight.w600, fontSize: 14)),
-      onTap: onTap,
+      title: Text(
+        title, 
+        style: TextStyle(
+          // Grey out the text if disabled
+          color: isDisabled ? Colors.white24 : Colors.white70, 
+          fontWeight: FontWeight.w600, 
+          fontSize: 14
+        )
+      ),
+      onTap: onTap, // Passing null automatically disables the ListTile ripple effect
     );
   }
 

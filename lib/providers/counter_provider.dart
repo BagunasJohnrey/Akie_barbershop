@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/intl.dart';
+import '../models/barber_model.dart';
 
 class CounterProvider extends ChangeNotifier {
   final _supabase = Supabase.instance.client;
@@ -73,7 +74,7 @@ class CounterProvider extends ChangeNotifier {
     }
   }
 
-  bool isBarberAvailable(barber) {
+  bool isBarberAvailable(Barber barber) { // Added 'Barber' type here
     if (barber.isAbsent) return false;
     String today = DateFormat('EEEE').format(DateTime.now());
     return barber.dayOff.toLowerCase() != today.toLowerCase();
