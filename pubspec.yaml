@@ -1,0 +1,36 @@
+name: akie_barbershop
+description: "A new Flutter project."
+publish_to: 'none'
+version: 0.1.0+1
+
+environment:
+  sdk: ^3.11.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+  supabase_flutter: ^2.0.0 # Backend
+  intl: ^0.19.0            # Date formatting
+  provider: ^6.1.1         # State management
+  fl_chart: ^1.1.1
+  pdf: ^3.10.0
+  printing: ^5.11.0
+  path_provider: ^2.1.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+  fonts:
+    - family: SanFrancisco
+      fonts:
+        - asset: assets/fonts/SF-Pro-Display-Regular.otf
+        - asset: assets/fonts/SF-Pro-Display-Bold.otf
+          weight: 700
+        - asset: assets/fonts/SF-Pro-Display-Black.otf
+          weight: 900
+  assets: 
+      - assets/images/akie_logo.png
