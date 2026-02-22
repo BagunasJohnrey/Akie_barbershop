@@ -125,10 +125,10 @@ class _CounterScreenState extends State<CounterScreen> {
                           child: const Icon(Icons.lock_reset_rounded, color: Colors.redAccent, size: 32),
                         ),
                         const SizedBox(height: 16),
-                        const Text("Lock Dashboard?", 
-                          style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
+                        const Text("Are you sure you want to logout?", 
+                          style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
                         const SizedBox(height: 8),
-                        const Text("Access will require your secure PIN.", 
+                        const Text("Accessing the dashboard will require re-authentication.", 
                           textAlign: TextAlign.center,
                           style: TextStyle(color: Colors.white60, fontSize: 14)),
                         const SizedBox(height: 24),
@@ -149,8 +149,8 @@ class _CounterScreenState extends State<CounterScreen> {
                                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                                   padding: const EdgeInsets.symmetric(vertical: 12),
                                 ),
-                                onPressed: () => Navigator.pushNamedAndRemoveUntil(context, '/', (route) => false),
-                                child: const Text("Lock", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                                onPressed: () => SystemNavigator.pop(),
+                                child: const Text("Logout", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                               ),
                             ),
                           ],
@@ -987,7 +987,7 @@ Widget _buildDrawer(BuildContext context) {
                 
                 const Spacer(),
                 const Divider(color: Colors.white10, indent: 20, endIndent: 20),
-                _buildDrawerItem(Icons.power_settings_new_rounded, "Lock App", Colors.redAccent, () {
+                _buildDrawerItem(Icons.power_settings_new_rounded, "Logout", Colors.redAccent, () {
                   Navigator.pop(context);
                   _logout(context);
                 }),
