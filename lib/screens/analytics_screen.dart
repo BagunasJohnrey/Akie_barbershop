@@ -21,6 +21,11 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
 
   double _grossRevenue = 0;
   double _totalExpenses = 0;
+  
+  // FIX 1: Remove 'final' so these variables can be updated
+  double _dailyGross = 0.0;     
+  double _dailyExpenses = 0.0;  
+
   List<Map<String, dynamic>> _barberReports = [];
   double _monthlyGross = 0;
   double _monthlyExpenses = 0;
@@ -40,7 +45,6 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
     final supabase = Supabase.instance.client;
 
     try {
-      // 1. Setup Date Strings
       final selectedDateStr = DateFormat('yyyy-MM-dd').format(_selectedDate);
       final todayStr = DateFormat('yyyy-MM-dd').format(DateTime.now());
       
@@ -52,27 +56,22 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
       final monthStartUtc = DateTime(_selectedDate.year, _selectedDate.month, 1).toUtc().toIso8601String();
       final monthEndUtc = DateTime(_selectedDate.year, _selectedDate.month + 1, 0, 23, 59, 59).toUtc().toIso8601String();
 
-      // 2. Fetch Data from Supabase
       final barbersData = await supabase.from('barbers').select();
       final dailyReport = await supabase.from('daily_reports').select().eq('date', selectedDateStr).maybeSingle();
-      final dailyExpenses = await supabase.from('expenses').select().gte('date', dayStartUtc).lte('date', dayEndUtc);
+      final dailyExpensesData = await supabase.from('expenses').select().gte('date', dayStartUtc).lte('date', dayEndUtc);
       final monthlyReports = await supabase.from('daily_reports').select().gte('date', monthStartStr).lte('date', monthEndStr);
-      final monthlyExpenses = await supabase.from('expenses').select().gte('date', monthStartUtc).lte('date', monthEndUtc);
+      final monthlyExpensesData = await supabase.from('expenses').select().gte('date', monthStartUtc).lte('date', monthEndUtc);
 
-      // Map Barber IDs to Names for easy lookup
       Map<String, String> barberIdToName = {};
       for (var b in barbersData) {
         barberIdToName[b['id']] = b['name'];
       }
 
-      // 3. Calculate Daily Stats
       double tempGross = 0;
       List<Map<String, dynamic>> tempBarberReports = [];
 
-      // If viewing a closed day (or past day), use the saved report
       if (dailyReport != null) {
         tempGross = (dailyReport['total_revenue'] ?? 0).toDouble();
-        
         if (dailyReport['barber_stats'] != null) {
           Map<String, dynamic> stats = dailyReport['barber_stats'];
           stats.forEach((barberId, count) {
@@ -84,17 +83,13 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
             });
           });
         }
-      } 
-      // If viewing TODAY and the shop isn't closed yet, use live Provider data
-      else if (selectedDateStr == todayStr) {
+      } else if (selectedDateStr == todayStr) {
         tempGross = provider.todayTransactions.length * provider.globalPrice.toDouble();
-        
         Map<String, int> liveCounts = {};
         for (var t in provider.todayTransactions) {
           String bId = t['barber_id'];
           liveCounts[bId] = (liveCounts[bId] ?? 0) + 1;
         }
-        
         liveCounts.forEach((barberId, count) {
           double bEarnings = count * (provider.globalPrice * 0.5);
           tempBarberReports.add({
@@ -106,12 +101,10 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
       }
 
       double tempExp = 0;
-      for (var e in dailyExpenses) { tempExp += (e['amount'] ?? 0).toDouble(); }
+      for (var e in dailyExpensesData) { tempExp += (e['amount'] ?? 0).toDouble(); }
 
-      // 4. Calculate Monthly Stats & Chart Data
       double tempMGross = 0;
       Map<int, double> dailyGrossMap = {};
-      
       for (var r in monthlyReports) {
         double rev = (r['total_revenue'] ?? 0).toDouble();
         tempMGross += rev;
@@ -119,7 +112,6 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
         dailyGrossMap[day] = rev;
       }
 
-      // Inject today's live data into the monthly total if viewing the current month and it isn't closed yet
       if (_selectedDate.year == DateTime.now().year && _selectedDate.month == DateTime.now().month && !provider.isShopClosed) {
         double todayLiveRev = provider.todayTransactions.length * provider.globalPrice.toDouble();
         tempMGross += todayLiveRev;
@@ -128,37 +120,37 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
 
       double tempMExpTotal = 0;
       Map<int, double> dailyExpMap = {};
-      for (var e in monthlyExpenses) {
+      for (var e in monthlyExpensesData) {
         double amt = (e['amount'] ?? 0).toDouble();
         tempMExpTotal += amt;
         int day = DateTime.parse(e['date']).toLocal().day;
         dailyExpMap[day] = (dailyExpMap[day] ?? 0) + amt;
       }
 
-      // Generate the Graph Spots
       List<FlSpot> spots = [];
       final daysInMonth = DateTime(_selectedDate.year, _selectedDate.month + 1, 0).day;
       final currentDayOfMonth = DateTime.now().day;
       final isCurrentMonth = _selectedDate.year == DateTime.now().year && _selectedDate.month == DateTime.now().month;
 
       for (int i = 1; i <= daysInMonth; i++) {
-        // Stop plotting flat lines for future days in the current month
         if (isCurrentMonth && i > currentDayOfMonth) break; 
-        
         double dayShopGross = dailyGrossMap[i] ?? 0;
         double dayExpenses = dailyExpMap[i] ?? 0;
         double dayNet = (dayShopGross * 0.5) - dayExpenses;
-        
         spots.add(FlSpot(i.toDouble(), dayNet));
       }
 
-      // Sort barber reports by count (highest first)
       tempBarberReports.sort((a, b) => (b['count'] as int).compareTo(a['count'] as int));
 
       if (!mounted) return;
       setState(() {
         _grossRevenue = tempGross; 
         _totalExpenses = tempExp; 
+        
+        // FIX 2: Assign calculated values to these variables for the PDF
+        _dailyGross = tempGross;
+        _dailyExpenses = tempExp;
+
         _barberReports = tempBarberReports;
         _monthlyGross = tempMGross; 
         _monthlyExpenses = tempMExpTotal; 
@@ -197,13 +189,12 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                   icon: const Icon(Icons.picture_as_pdf_rounded, color: Colors.redAccent),
                   onPressed: () => PdfExportService.generateMonthlyReport(
                     monthYear: DateFormat('MMMM yyyy').format(_selectedDate),
-                    
-                    // Add this line so the PDF knows exactly which day you picked!
                     selectedDate: DateFormat('MMMM d, yyyy').format(_selectedDate), 
-                    
                     gross: _monthlyGross,
                     expenses: _monthlyExpenses,
                     net: monthlyShopNet,
+                    dailyGross: _dailyGross,      
+                    dailyExpenses: _dailyExpenses,
                     barberReports: _barberReports,
                   ),
                 ),
