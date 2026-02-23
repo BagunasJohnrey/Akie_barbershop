@@ -19,7 +19,8 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
   String _selectedCategory = 'Supplies';
   late Future<List<Map<String, dynamic>>> _expensesFuture;
   
-  // Track which tile is expanded
+  // 1. ADD SELECTED DATE STATE
+  DateTime _selectedDate = DateTime.now();
   int? _expandedIndex;
 
   @override
@@ -34,31 +35,51 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
     });
   }
 
+  // 2. ADD DATE PICKER FUNCTION
+  Future<void> _selectDate(BuildContext context) async {
+    final DateTime? picked = await showDatePicker(
+      context: context,
+      initialDate: _selectedDate,
+      firstDate: DateTime(2024),
+      lastDate: DateTime.now(),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: const ColorScheme.dark(
+              primary: Colors.blueAccent,
+              onPrimary: Colors.white,
+              surface: Color(0xFF1A1C29),
+              onSurface: Colors.white,
+            ),
+            dialogBackgroundColor: const Color(0xFF0A0C12),
+          ),
+          child: child!,
+        );
+      },
+    );
+    if (picked != null && picked != _selectedDate) {
+      setState(() {
+        _selectedDate = picked;
+      });
+    }
+  }
+
   void _showTopAlert(BuildContext context, String message, {bool isError = false}) {
     final overlay = Overlay.of(context);
     late OverlayEntry overlayEntry;
-
     overlayEntry = OverlayEntry(
       builder: (context) => Positioned(
-        top: MediaQuery.of(context).padding.top + 16, // Just below status bar
+        top: MediaQuery.of(context).padding.top + 16,
         left: 0,
         right: 0,
         child: SafeArea(
-          child: _PremiumTopAlert(
-            message: message,
-            isError: isError,
-          ),
+          child: _PremiumTopAlert(message: message, isError: isError),
         ),
       ),
     );
-
     overlay.insert(overlayEntry);
-
-    // Auto dismiss after 3 seconds
     Future.delayed(const Duration(seconds: 3), () {
-      if (overlayEntry.mounted) {
-        overlayEntry.remove();
-      }
+      if (overlayEntry.mounted) overlayEntry.remove();
     });
   }
 
@@ -87,15 +108,22 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
               elevation: 0,
               backgroundColor: Colors.white.withValues(alpha: 0.02),
               centerTitle: true,
+              leading: IconButton(
+                icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white70, size: 20),
+                onPressed: () => Navigator.pop(context),
+              ),
               title: const Text(
                 'SHOP EXPENSES',
-                style: TextStyle(
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: 3.0,
-                  fontSize: 14,
-                  color: Colors.white70,
-                ),
+                style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 3.0, fontSize: 14, color: Colors.white70),
               ),
+              // 3. ADD CALENDAR ICON TO APPBAR
+              actions: [
+                IconButton(
+                  icon: const Icon(Icons.calendar_month_rounded, color: Colors.blueAccent),
+                  onPressed: () => _selectDate(context),
+                ),
+                const SizedBox(width: 8),
+              ],
             ),
           ),
         ),
@@ -112,118 +140,20 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const SizedBox(height: 120),
+                
+                // 4. DISPLAY CURRENTLY FILTERED DATE
+                _buildLabel("FILTERED BY: ${DateFormat('MMMM dd, yyyy').format(_selectedDate).toUpperCase()}"),
+                
+                _buildTodaySummarySection(), // Extracted for clarity
+
+                const SizedBox(height: 30),
                 _buildLabel("LOG NEW EXPENSE"),
                 
-                Container(
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.05),
-                    borderRadius: BorderRadius.circular(32),
-                    border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
-                  ),
-                  child: Column(
-                    children: [
-                      _buildInputContainer(
-                        child: DropdownButtonFormField<String>(
-                          dropdownColor: const Color(0xFF1A1C29),
-                          initialValue: _selectedCategory,
-                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
-                          items: ['Rent', 'Supplies', 'Electricity', 'Misc']
-                              .map((l) => DropdownMenuItem(value: l, child: Text(l)))
-                              .toList(),
-                          onChanged: (val) => setState(() => _selectedCategory = val!),
-                          decoration: const InputDecoration(
-                            border: InputBorder.none,
-                            prefixIcon: Icon(Icons.category_rounded, color: Colors.blueAccent, size: 20),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      _buildTextField(_amountController, "Amount (PHP)", Icons.payments_rounded, TextInputType.number),
-                      const SizedBox(height: 12),
-                      _buildTextField(_descController, "Description (Optional)", Icons.description_rounded, TextInputType.text),
-                      const SizedBox(height: 20),
-                      SizedBox(
-                        width: double.infinity,
-                        height: 55,
-                        child: ElevatedButton(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.blueAccent,
-                            foregroundColor: Colors.white,
-                            elevation: 0,
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-                          ),
-                          onPressed: () async {
-                            final amount = int.tryParse(_amountController.text) ?? 0;
-                            if (amount > 0) {
-                              HapticFeedback.mediumImpact();
-                              try {
-                              await context.read<CounterProvider>().addExpense(amount, _selectedCategory, _descController.text);
-                                if (!context.mounted) return; // <--- NEW
-                                _amountController.clear(); 
-                                _descController.clear(); 
-                                _refresh();
-                                _showTopAlert(context, 'Expense saved successfully!');
-                              } catch (e) {
-                                if (!context.mounted) return; // <--- NEW
-                                _showTopAlert(context, 'Error saving expense', isError: true);
-                              }
-                            } else {
-                              _showTopAlert(context, 'Please enter a valid amount', isError: true);
-                            }
-                          },
-                          child: const Text('SAVE EXPENSE', style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 1.5)),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
+                _buildAddExpenseForm(), // Extracted for clarity
 
                 const SizedBox(height: 40),
                 
-                FutureBuilder<List<Map<String, dynamic>>>(
-                  future: _expensesFuture,
-                  builder: (context, snapshot) {
-                    if (snapshot.connectionState == ConnectionState.waiting) {
-                      return const Center(child: CircularProgressIndicator(color: Colors.blueAccent));
-                    }
-                    
-                    final allExpenses = snapshot.data ?? [];
-                    final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
-                    final todayTotal = allExpenses
-                        .where((e) => DateFormat('yyyy-MM-dd').format(DateTime.parse(e['date'])) == today)
-                        .fold(0.0, (sum, e) => sum + (e['amount'] ?? 0));
-
-                    return Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _buildTodaySummary(todayTotal),
-                        const SizedBox(height: 30),
-                        _buildLabel("RECENT EXPENSE HISTORY"),
-                        if (allExpenses.isEmpty)
-                          const Center(
-                            child: Padding(
-                              padding: EdgeInsets.only(top: 20),
-                              child: Text("No records found.", style: TextStyle(color: Colors.white24, fontWeight: FontWeight.w600)),
-                            ),
-                          )
-                        else
-                          ListView.builder(
-                            shrinkWrap: true,
-                            padding: EdgeInsets.zero,
-                            physics: const NeverScrollableScrollPhysics(),
-                            itemCount: allExpenses.length,
-                            itemBuilder: (context, index) {
-                              final exp = allExpenses[index];
-                              final formattedDate = DateFormat('MMM dd, yyyy').format(DateTime.parse(exp['date']).toLocal());
-                              return _buildExpenseTile(context, exp, formattedDate, index);
-                            },
-                          ),
-                      ],
-                    );
-                  },
-                ),
-                const SizedBox(height: 30),
+                _buildExpenseHistorySection(), // Updated with filtering logic
               ],
             ),
           ),
@@ -232,7 +162,70 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
     );
   }
 
-  Widget _buildTodaySummary(double total) {
+  Widget _buildTodaySummarySection() {
+    return FutureBuilder<List<Map<String, dynamic>>>(
+      future: _expensesFuture,
+      builder: (context, snapshot) {
+        final allExpenses = snapshot.data ?? [];
+        final filterDate = DateFormat('yyyy-MM-dd').format(_selectedDate);
+        
+        final filteredTotal = allExpenses
+            .where((e) => DateFormat('yyyy-MM-dd').format(DateTime.parse(e['date'])) == filterDate)
+            .fold(0.0, (sum, e) => sum + (e['amount'] ?? 0));
+
+        return _buildTodaySummary(filteredTotal, _selectedDate);
+      },
+    );
+  }
+
+  Widget _buildExpenseHistorySection() {
+    return FutureBuilder<List<Map<String, dynamic>>>(
+      future: _expensesFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator(color: Colors.blueAccent));
+        }
+        
+        final allExpenses = snapshot.data ?? [];
+        final filterDate = DateFormat('yyyy-MM-dd').format(_selectedDate);
+        
+        // 5. FILTER HISTORY LIST BY SELECTED DATE
+        final filteredExpenses = allExpenses
+            .where((e) => DateFormat('yyyy-MM-dd').format(DateTime.parse(e['date'])) == filterDate)
+            .toList();
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildLabel("HISTORY FOR ${DateFormat('MMM dd').format(_selectedDate).toUpperCase()}"),
+            if (filteredExpenses.isEmpty)
+              const Center(
+                child: Padding(
+                  padding: EdgeInsets.only(top: 20),
+                  child: Text("No records for this date.", style: TextStyle(color: Colors.white24, fontWeight: FontWeight.w600)),
+                ),
+              )
+            else
+              ListView.builder(
+                shrinkWrap: true,
+                padding: EdgeInsets.zero,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: filteredExpenses.length,
+                itemBuilder: (context, index) {
+                  final exp = filteredExpenses[index];
+                  final formattedDate = DateFormat('MMM dd, yyyy').format(DateTime.parse(exp['date']).toLocal());
+                  return _buildExpenseTile(context, exp, formattedDate, index);
+                },
+              ),
+            const SizedBox(height: 30),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildTodaySummary(double total, DateTime date) {
+    bool isToday = DateFormat('yyyy-MM-dd').format(DateTime.now()) == DateFormat('yyyy-MM-dd').format(date);
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(24),
@@ -246,7 +239,10 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
       ),
       child: Column(
         children: [
-          const Text("TOTAL EXPENSE TODAY", style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.w900, fontSize: 10, letterSpacing: 1.5)),
+          Text(
+            isToday ? "TOTAL EXPENSE TODAY" : "TOTAL EXPENSE FOR ${DateFormat('MMM dd').format(date).toUpperCase()}", 
+            style: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.w900, fontSize: 10, letterSpacing: 1.5)
+          ),
           const SizedBox(height: 8),
           Text(
             CurrencyFormatter.format(total),
@@ -256,6 +252,75 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
       ),
     );
   }
+
+  Widget _buildAddExpenseForm() {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.05),
+        borderRadius: BorderRadius.circular(32),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+      ),
+      child: Column(
+        children: [
+          _buildInputContainer(
+            child: DropdownButtonFormField<String>(
+              dropdownColor: const Color(0xFF1A1C29),
+              value: _selectedCategory,
+              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+              items: ['Rent', 'Supplies', 'Electricity', 'Misc']
+                  .map((l) => DropdownMenuItem(value: l, child: Text(l)))
+                  .toList(),
+              onChanged: (val) => setState(() => _selectedCategory = val!),
+              decoration: const InputDecoration(
+                border: InputBorder.none,
+                prefixIcon: Icon(Icons.category_rounded, color: Colors.blueAccent, size: 20),
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          _buildTextField(_amountController, "Amount (PHP)", Icons.payments_rounded, TextInputType.number),
+          const SizedBox(height: 12),
+          _buildTextField(_descController, "Description (Optional)", Icons.description_rounded, TextInputType.text),
+          const SizedBox(height: 20),
+          SizedBox(
+            width: double.infinity,
+            height: 55,
+            child: ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.blueAccent,
+                foregroundColor: Colors.white,
+                elevation: 0,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+              ),
+              onPressed: () async {
+                final amount = int.tryParse(_amountController.text) ?? 0;
+                if (amount > 0) {
+                  HapticFeedback.mediumImpact();
+                  try {
+                    await context.read<CounterProvider>().addExpense(amount, _selectedCategory, _descController.text);
+                    if (!context.mounted) return;
+                    _amountController.clear(); 
+                    _descController.clear(); 
+                    _refresh();
+                    _showTopAlert(context, 'Expense saved successfully!');
+                  } catch (e) {
+                    if (!context.mounted) return;
+                    _showTopAlert(context, 'Error saving expense', isError: true);
+                  }
+                } else {
+                  _showTopAlert(context, 'Please enter a valid amount', isError: true);
+                }
+              },
+              child: const Text('SAVE EXPENSE', style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 1.5)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // --- REUSED UI HELPERS (Tile, Dialog, Label, etc.) ---
 
   Widget _buildExpenseTile(BuildContext context, Map<String, dynamic> exp, String date, int index) {
     bool isExpanded = _expandedIndex == index;
@@ -280,26 +345,33 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
         child: Column(
           children: [
             Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 _getCategoryIcon(exp['category']),
                 const SizedBox(width: 16),
                 Expanded(
                   child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start, 
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text(exp['category'], style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 15)),
+                      Text(
+                        exp['category'].toString().toUpperCase(), 
+                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 13, letterSpacing: 0.5)
+                      ),
+                      const SizedBox(height: 2),
                       Text(date, style: const TextStyle(color: Colors.white38, fontSize: 11, fontWeight: FontWeight.bold)),
                     ],
                   ),
                 ),
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.end,
+                  mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Text(
                       "- ${CurrencyFormatter.format(exp['amount'])}", 
                       style: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.w900, fontSize: 15),
                     ),
-                    const SizedBox(height: 4),
+                    const SizedBox(height: 2),
                     Icon(
                       isExpanded ? Icons.keyboard_arrow_up_rounded : Icons.keyboard_arrow_down_rounded,
                       color: Colors.white24,
@@ -315,7 +387,6 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
                 child: Divider(color: Colors.white10, height: 1),
               ),
               Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Expanded(
                     child: Text(
@@ -341,8 +412,6 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
     );
   }
 
-  // REFINED GLASS DIALOG (Copied from Settings design)
-// REFINED GLASS DIALOG (Matched to Counter Screen)
   void _showDeleteConfirmation(BuildContext context, String id) {
     HapticFeedback.vibrate();
     showGeneralDialog(
@@ -375,23 +444,13 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
                       children: [
                         Container(
                           padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            color: Colors.redAccent.withValues(alpha: 0.1),
-                            shape: BoxShape.circle,
-                          ),
+                          decoration: BoxDecoration(color: Colors.redAccent.withValues(alpha: 0.1), shape: BoxShape.circle),
                           child: const Icon(Icons.delete_sweep_rounded, color: Colors.redAccent, size: 32),
                         ),
                         const SizedBox(height: 16),
-                        const Text(
-                          "Delete Record?", 
-                          style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)
-                        ),
+                        const Text("Delete Record?", style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
                         const SizedBox(height: 8),
-                        const Text(
-                          "This action cannot be undone. Are you sure you want to remove this expense?", 
-                          textAlign: TextAlign.center,
-                          style: TextStyle(color: Colors.white60, fontSize: 14)
-                        ),
+                        const Text("This action cannot be undone.", textAlign: TextAlign.center, style: TextStyle(color: Colors.white60, fontSize: 14)),
                         const SizedBox(height: 24),
                         Row(
                           children: [
@@ -406,31 +465,19 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
                               child: ElevatedButton(
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: Colors.redAccent.withValues(alpha: 0.8),
-                                  elevation: 0,
                                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                                   padding: const EdgeInsets.symmetric(vertical: 12),
                                 ),
                                 onPressed: () async {
                                   try {
-                                    // Optional: Show loading indicator while deleting
-                                    showDialog(
-                                      context: context, 
-                                      barrierDismissible: false,
-                                      builder: (context) => const Center(child: CircularProgressIndicator(color: Colors.redAccent)),
-                                    );
-                                  await context.read<CounterProvider>().deleteExpense(id);
-                                    
-                                    if (!context.mounted) return; // <--- NEW
-                                    
-                                    Navigator.pop(context); // Pop loading dialog
-                                    Navigator.pop(context); // Pop confirmation modal
-                                    
+                                    await context.read<CounterProvider>().deleteExpense(id);
+                                    if (!context.mounted) return;
+                                    Navigator.pop(context);
                                     _refresh();
                                     _showTopAlert(context, 'Expense record deleted.');
                                   } catch (e) {
-                                    if (!context.mounted) return; // <--- NEW
-                                    Navigator.pop(context); // Pop loading dialog
-                                    Navigator.pop(context); // Pop confirmation modal
+                                    if (!context.mounted) return;
+                                    Navigator.pop(context);
                                     _showTopAlert(context, 'Error deleting expense', isError: true);
                                   }
                                 },
@@ -438,7 +485,7 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
                               ),
                             ),
                           ],
-                        )
+                        ),
                       ],
                     ),
                   ),
@@ -480,30 +527,26 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
     ),
   );
 
-  Widget _getCategoryIcon(String cat) { 
-    IconData i; Color c; 
-    switch (cat) { 
-      case 'Rent': i = Icons.home_work_rounded; c = Colors.orangeAccent; break; 
-      case 'Supplies': i = Icons.inventory_2_rounded; c = Colors.blueAccent; break; 
-      case 'Electricity': i = Icons.electric_bolt_rounded; c = Colors.yellowAccent; break; 
-      default: i = Icons.miscellaneous_services_rounded; c = Colors.purpleAccent; 
-    } 
+  Widget _getCategoryIcon(String category) {
+    IconData iconData; Color color;
+    switch (category) {
+      case 'Rent': iconData = Icons.home_work_rounded; color = Colors.orangeAccent; break;
+      case 'Supplies': iconData = Icons.inventory_2_rounded; color = Colors.blueAccent; break;
+      case 'Electricity': iconData = Icons.electric_bolt_rounded; color = Colors.yellowAccent; break;
+      default: iconData = Icons.miscellaneous_services_rounded; color = Colors.purpleAccent;
+    }
     return Container(
-      padding: const EdgeInsets.all(10), 
-      decoration: BoxDecoration(color: c.withValues(alpha: 0.1), shape: BoxShape.circle), 
-      child: Icon(i, color: c, size: 22),
-    ); 
+      width: 44, height: 44,
+      decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(12)),
+      child: Icon(iconData, color: color, size: 22),
+    );
   }
 }
 
 class _PremiumTopAlert extends StatelessWidget {
   final String message;
   final bool isError;
-
-  const _PremiumTopAlert({
-    required this.message, 
-    this.isError = false,
-  });
+  const _PremiumTopAlert({required this.message, this.isError = false});
 
   @override
   Widget build(BuildContext context) {
@@ -511,12 +554,7 @@ class _PremiumTopAlert extends StatelessWidget {
       duration: const Duration(milliseconds: 600),
       curve: Curves.easeOutBack,
       tween: Tween<double>(begin: -100, end: 0),
-      builder: (context, double value, child) {
-        return Transform.translate(
-          offset: Offset(0, value),
-          child: child,
-        );
-      },
+      builder: (context, double value, child) => Transform.translate(offset: Offset(0, value), child: child),
       child: Material(
         color: Colors.transparent,
         child: Center( 
@@ -529,30 +567,15 @@ class _PremiumTopAlert extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: Colors.black.withValues(alpha: 0.6), 
                   borderRadius: BorderRadius.circular(25),
-                  border: Border.all(
-                    color: Colors.white.withValues(alpha: 0.1), 
-                  ),
+                  border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(
-                      isError ? Icons.warning_amber_rounded : Icons.check_circle_outline_rounded, 
-                      color: isError ? Colors.redAccent : Colors.greenAccent, 
-                      size: 22
-                    ),
+                    Icon(isError ? Icons.warning_amber_rounded : Icons.check_circle_outline_rounded, 
+                         color: isError ? Colors.redAccent : Colors.greenAccent, size: 22),
                     const SizedBox(width: 12),
-                    Flexible(
-                      child: Text(
-                        message,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 15,
-                          fontWeight: FontWeight.w600,
-                          letterSpacing: -0.2, 
-                        ),
-                      ),
-                    ),
+                    Flexible(child: Text(message, style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w600, letterSpacing: -0.2))),
                   ],
                 ),
               ),
